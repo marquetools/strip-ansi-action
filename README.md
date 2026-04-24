@@ -206,6 +206,36 @@ jobs:
           on-threat: warn
 ```
 
+### Per-comment event workflow (recommended for ongoing protection)
+
+For continuous protection with minimal redundant work, trigger the action on **individual comment events** rather than scanning all comments in bulk every time. This fires only when a comment is created or edited, so it processes only the single comment that just changed.
+
+See [`tests/comment-events.yml`](tests/comment-events.yml) for a ready-to-copy workflow, or use this minimal version:
+
+```yaml
+on:
+  issue_comment:
+    types: [created, edited]
+  pull_request_review_comment:
+    types: [created, edited]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  scan-comment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: marquetools/strip-ansi-action@v1
+        with:
+          clean-pr-comments: ${{ github.event_name == 'pull_request_review_comment' }}
+          clean-issue-comments: ${{ github.event_name == 'issue_comment' }}
+          on-threat: warn
+```
+
 ---
 
 ## Threat Handling
