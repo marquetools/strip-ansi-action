@@ -1,0 +1,5 @@
+[32mHello, World![0m
+[1;34mThis line is bold blue.[0m
+[31mError:[0m This is a red label followed by plain text.
+This line has no ANSI sequences at all.
+[33m[1mWarning:[0m Multi-SGR sequence on this line.

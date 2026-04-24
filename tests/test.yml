@@ -1,0 +1,100 @@
+# strip-ansi-action integration test example
+#
+# This workflow demonstrates how to use strip-ansi-action in a pull request context.
+# Copy this file to your repository's .github/workflows/ directory to enable it.
+#
+# The action scans files for ANSI escape sequences and Unicode homograph threats,
+# and fails the workflow if echoback attack vectors are detected.
+
+name: Strip ANSI (Integration Test Example)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  scan-pr-files:
+    name: Scan changed files
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Get the list of files changed in this PR.
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          separator: "\n"
+
+      # Run strip-ansi on all changed files, failing if threats are detected.
+      - name: Scan for ANSI threats
+        id: scan
+        uses: marquetools/strip-ansi-action@v1
+        with:
+          files: ${{ steps.changed-files.outputs.all_changed_files }}
+          on-threat: fail
+          preset: sanitize
+          unicode-map: '@ascii-normalize'
+
+      # Report the scan results (runs even if the scan step fails).
+      - name: Report results
+        if: always()
+        run: |
+          echo "Threat detected: ${{ steps.scan.outputs.threat-detected }}"
+          if [ "${{ steps.scan.outputs.threat-detected }}" = "true" ]; then
+            echo "Files with threats:"
+            echo "${{ steps.scan.outputs.files-with-threats }}"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Example: strip threats silently and use the cleaned output downstream
+  # ---------------------------------------------------------------------------
+  strip-and-continue:
+    name: Strip threats and process output
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          separator: "\n"
+
+      - name: Strip ANSI and Unicode threats
+        id: strip
+        uses: marquetools/strip-ansi-action@v1
+        with:
+          files: ${{ steps.changed-files.outputs.all_changed_files }}
+          on-threat: strip
+          preset: dumb
+
+      - name: Use cleaned output
+        run: |
+          echo "Threats were present: ${{ steps.strip.outputs.threat-detected }}"
+          echo "Results JSON available in steps.strip.outputs.results"
+
+  # ---------------------------------------------------------------------------
+  # Example: disable unicode normalization for binary/generated files
+  # ---------------------------------------------------------------------------
+  scan-without-unicode-normalization:
+    name: Scan (no unicode normalization)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan generated files (ANSI threats only, no unicode normalization)
+        uses: marquetools/strip-ansi-action@v1
+        with:
+          files: |
+            strip-ansi-action/tests/fixtures/clean.txt
+            strip-ansi-action/tests/fixtures/ansi_only.txt
+          on-threat: warn
+          preset: sanitize
+          no-unicode-map: '@ascii-normalize'

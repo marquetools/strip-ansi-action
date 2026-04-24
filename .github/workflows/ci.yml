@@ -1,0 +1,158 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: Lint shell scripts with shellcheck and validate action.yml with actionlint
+  # ---------------------------------------------------------------------------
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: shellcheck
+        run: |
+          shellcheck --severity=warning \
+            strip-ansi-action/scripts/install.sh \
+            strip-ansi-action/scripts/run.sh
+
+      - name: actionlint
+        uses: rhysd/actionlint@v1
+        with:
+          files: strip-ansi-action/action.yml
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Cross-platform integration tests
+  # ---------------------------------------------------------------------------
+  test-matrix:
+    name: Test (${{ matrix.os }})
+    needs: lint
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- Test 1: clean file → no threat ---
+      - name: 'Test: clean file (expect threat-detected=false)'
+        id: test-clean
+        uses: ./strip-ansi-action
+        with:
+          files: strip-ansi-action/tests/fixtures/clean.txt
+          on-threat: warn
+
+      - name: Assert clean result
+        shell: bash
+        run: |
+          if [ "${{ steps.test-clean.outputs.threat-detected }}" != "false" ]; then
+            echo "::error::Expected threat-detected=false for clean.txt, got: ${{ steps.test-clean.outputs.threat-detected }}"
+            exit 1
+          fi
+          echo "PASS: threat-detected=false for clean.txt"
+
+      # --- Test 2: ANSI-only file → stripped, no threat ---
+      - name: 'Test: ANSI-only file (expect status=stripped, threat-detected=false)'
+        id: test-ansi
+        uses: ./strip-ansi-action
+        with:
+          files: strip-ansi-action/tests/fixtures/ansi_only.txt
+          on-threat: warn
+
+      - name: Assert ANSI-only result
+        shell: bash
+        run: |
+          if [ "${{ steps.test-ansi.outputs.threat-detected }}" != "false" ]; then
+            echo "::error::Expected threat-detected=false for ansi_only.txt"
+            exit 1
+          fi
+          # Verify the results JSON contains status=stripped or clean.
+          # Pass via env var to avoid shell-quoting issues with single quotes in content.
+          RESULTS_JSON="${{ steps.test-ansi.outputs.results }}" python3 -c "
+          import os, json
+          results = json.loads(os.environ['RESULTS_JSON'])
+          assert results, 'results must not be empty'
+          status = results[0]['status']
+          assert status in ('stripped', 'clean'), f'expected stripped/clean, got {status}'
+          print(f'PASS: status={status} for ansi_only.txt')
+          "
+
+      # --- Test 3: threat file + on-threat=warn → threat-detected=true, step succeeds ---
+      - name: 'Test: threat file with on-threat=warn (expect threat-detected=true, step succeeds)'
+        id: test-threat-warn
+        uses: ./strip-ansi-action
+        with:
+          files: strip-ansi-action/tests/fixtures/threat.txt
+          on-threat: warn
+
+      - name: Assert warn result
+        shell: bash
+        run: |
+          if [ "${{ steps.test-threat-warn.outputs.threat-detected }}" != "true" ]; then
+            echo "::error::Expected threat-detected=true for threat.txt with on-threat=warn"
+            exit 1
+          fi
+          echo "PASS: threat-detected=true for threat.txt (warn mode)"
+
+      # --- Test 4: threat file + on-threat=fail → step must fail ---
+      - name: 'Test: threat file with on-threat=fail (expect step failure)'
+        id: test-threat-fail
+        continue-on-error: true
+        uses: ./strip-ansi-action
+        with:
+          files: strip-ansi-action/tests/fixtures/threat.txt
+          on-threat: fail
+
+      - name: Assert fail result
+        shell: bash
+        run: |
+          if [ "${{ steps.test-threat-fail.outcome }}" != "failure" ]; then
+            echo "::error::Expected the action step to fail for threat.txt with on-threat=fail"
+            exit 1
+          fi
+          echo "PASS: action correctly failed for threat.txt (fail mode)"
+
+      # --- Test 5: threat file + on-threat=strip → threat-detected=true, step succeeds ---
+      - name: 'Test: threat file with on-threat=strip (expect threat-detected=true, step succeeds)'
+        id: test-threat-strip
+        uses: ./strip-ansi-action
+        with:
+          files: strip-ansi-action/tests/fixtures/threat.txt
+          on-threat: strip
+
+      - name: Assert strip result
+        shell: bash
+        run: |
+          if [ "${{ steps.test-threat-strip.outputs.threat-detected }}" != "true" ]; then
+            echo "::error::Expected threat-detected=true for threat.txt with on-threat=strip"
+            exit 1
+          fi
+          echo "PASS: threat-detected=true, step succeeded for threat.txt (strip mode)"
+
+  # ---------------------------------------------------------------------------
+  # Job 3: Summarise results
+  # ---------------------------------------------------------------------------
+  ci-pass:
+    name: CI Pass
+    needs: [lint, test-matrix]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check all jobs passed
+        run: |
+          if [ "${{ needs.lint.result }}" != "success" ] || \
+             [ "${{ needs.test-matrix.result }}" != "success" ]; then
+            echo "::error::One or more CI jobs failed."
+            exit 1
+          fi
+          echo "All CI checks passed."

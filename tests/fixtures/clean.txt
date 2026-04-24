@@ -1,0 +1,6 @@
+Hello, World!
+This is a clean file with no ANSI escape sequences and no Unicode threats.
+It contains only plain ASCII text that should pass through strip-ansi unchanged.
+
+The quick brown fox jumps over the lazy dog.
+1234567890 !@#$%^&*()-_=+[]{};:'",.<>?/`~

@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: Validate the action before releasing
+  # ---------------------------------------------------------------------------
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: shellcheck
+        run: |
+          shellcheck --severity=warning \
+            strip-ansi-action/scripts/install.sh \
+            strip-ansi-action/scripts/run.sh
+
+      - name: actionlint
+        uses: rhysd/actionlint@v1
+        with:
+          files: strip-ansi-action/action.yml
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Run the full test matrix before publishing
+  # ---------------------------------------------------------------------------
+  test:
+    name: Test (${{ matrix.os }})
+    needs: validate
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Smoke test — clean file
+        uses: ./strip-ansi-action
+        with:
+          files: strip-ansi-action/tests/fixtures/clean.txt
+          on-threat: fail
+
+      - name: Smoke test — ANSI-only file
+        uses: ./strip-ansi-action
+        with:
+          files: strip-ansi-action/tests/fixtures/ansi_only.txt
+          on-threat: fail
+
+  # ---------------------------------------------------------------------------
+  # Job 3: Create GitHub Release and update floating major tag
+  # ---------------------------------------------------------------------------
+  release:
+    name: Publish Release
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          if ! printf '%s\n' "${VERSION}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Tag '${VERSION}' is not a valid semver release tag (expected v<major>.<minor>.<patch>)." >&2
+            exit 1
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.version.outputs.version }}" \
+            --title "strip-ansi-action ${{ steps.version.outputs.version }}" \
+            --generate-notes \
+            --verify-tag
+
+      - name: Update floating major tag (e.g. v1)
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          MAJOR_TAG="$(printf '%s\n' "${VERSION}" | sed -n 's/^\(v[0-9][0-9]*\)\.[0-9][0-9]*\.[0-9][0-9]*$/\1/p')"
+          if [ -z "${MAJOR_TAG}" ]; then
+            echo "::error::Could not derive major tag from '${VERSION}'." >&2
+            exit 1
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag --force "${MAJOR_TAG}"
+          git push --force origin "${MAJOR_TAG}"
+          echo "Updated floating tag ${MAJOR_TAG} → ${VERSION}"

@@ -1,0 +1,146 @@
+# SPDX-FileCopyrightText: 2026 Knitli Inc.
+# SPDX-License-Identifier: MIT OR Apache-2.0
+name: "Strip ANSI & Unicode Threats"
+description: >
+  Strips ANSI escape sequences and Unicode homograph threats from a list of files.
+  Fails, warns, or silently strips when echoback attack vectors are detected.
+author: "Knitli Inc."
+branding:
+  icon: "shield"
+  color: "blue"
+
+inputs:
+  files:
+    description: >
+      Newline- or space-separated list of file paths to scan.
+      Typically populated from the output of a changed-files step or a similar action.
+    required: true
+
+  on-threat:
+    description: >
+      Action to take when an echoback attack vector is detected.
+      Accepted values: fail (default), strip, warn.
+        fail  — mark files, emit ::error annotations, and exit non-zero after all files are processed.
+        strip — remove threats from output and continue; sets the threat-detected output to true.
+        warn  — emit ::warning annotations and continue; sets the threat-detected output to true.
+    required: false
+    default: "fail"
+
+  unicode-map:
+    description: >
+      Space-separated list of Unicode normalization sets to enable. Accepts @tag shorthand
+      (e.g. @ascii-normalize, @japanese), a shipped file name (e.g. math-latin), or a path to
+      a custom TOML mapping file. If provided, this replaces the default map set; if left empty,
+      the default is @ascii-normalize. Passed to distill-strip-ansi as one --unicode-map flag
+      per token.
+    required: false
+    default: "@ascii-normalize"
+
+  no-unicode-map:
+    description: >
+      Space-separated list of Unicode normalization sets to disable.
+      Accepts the same values as unicode-map. Passed as --no-unicode-map flags.
+      Leave empty to keep all defaults enabled.
+    required: false
+    default: ""
+
+  preset:
+    description: >
+      ANSI filter preset controlling which escape sequences survive.
+      Accepted values: dumb, color, sanitize (default), tmux, xterm, full.
+        dumb     — strip everything.
+        color    — keep SGR colors/styles only.
+        sanitize — safe default; keeps safe OSC (titles, links), strips echoback vectors.
+        tmux     — all CSI and Fe sequences.
+        xterm    — all OSC sequences.
+        full     — pass everything through.
+    required: false
+    default: "sanitize"
+
+  version:
+    description: "Version of distill-strip-ansi to install (must match a published crates.io release)."
+    required: false
+    default: "0.5.2"
+
+outputs:
+  results:
+    description: >
+      JSON array of per-file scan results.
+      Schema: [{"file":"<path>","status":"clean|stripped|threat","output":"<stripped content>"}]
+      The output field is empty for files with detected threats unless on-threat=strip.
+      Note: large files may be truncated in this field; check runner logs for full output.
+    value: ${{ steps.process.outputs.results }}
+
+  threat-detected:
+    description: "'true' if any scanned file contained an echoback attack vector, 'false' otherwise."
+    value: ${{ steps.process.outputs.threat-detected }}
+
+  files-with-threats:
+    description: "Newline-separated list of file paths that contained detected threats."
+    value: ${{ steps.process.outputs.files-with-threats }}
+
+runs:
+  using: composite
+  steps:
+    - name: Restore cached strip-ansi binary
+      id: cache
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
+      with:
+        path: ~/.local/bin/strip-ansi
+        key: strip-ansi-${{ inputs.version }}-${{ runner.os }}-${{ runner.arch }}
+
+    - name: Install distill-strip-ansi
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        chmod +x "${{ github.action_path }}/scripts/install.sh"
+        "${{ github.action_path }}/scripts/install.sh"
+      env:
+        STRIP_ANSI_VERSION: ${{ inputs.version }}
+
+    - name: Add install dir to PATH
+      shell: bash
+      run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+    - name: Process files
+      id: process
+      shell: bash
+      run: |
+        chmod +x "${{ github.action_path }}/scripts/run.sh"
+        "${{ github.action_path }}/scripts/run.sh"
+      env:
+        INPUT_FILES: ${{ inputs.files }}
+        INPUT_ON_THREAT: ${{ inputs.on-threat }}
+        INPUT_PRESET: ${{ inputs.preset }}
+        INPUT_UNICODE_MAP: ${{ inputs.unicode-map }}
+        INPUT_NO_UNICODE_MAP: ${{ inputs.no-unicode-map }}
+
+    - name: Fail on detected threats
+      if: ${{ inputs.on-threat == 'fail' && steps.process.outputs.threat-detected == 'true' }}
+      shell: bash
+      run: |
+        escape_annotation_property() {
+          local s="$1"
+          s="${s//'%'/'%25'}"
+          s="${s//$'\r'/'%0D'}"
+          s="${s//$'\n'/'%0A'}"
+          s="${s//':'/'%3A'}"
+          s="${s//','/'%2C'}"
+          printf '%s' "${s}"
+        }
+        escape_annotation_message() {
+          local s="$1"
+          s="${s//'%'/'%25'}"
+          s="${s//$'\r'/'%0D'}"
+          s="${s//$'\n'/'%0A'}"
+          printf '%s' "${s}"
+        }
+        echo "::error::ANSI/Unicode echoback threat(s) detected. See annotated files below."
+        while IFS= read -r f; do
+          if [ -n "$f" ]; then
+            ef="$(escape_annotation_property "$f")"
+            msg="$(escape_annotation_message "Echoback attack vector detected in $f")"
+            echo "::error file=${ef}::${msg}"
+          fi
+        done <<< "${{ steps.process.outputs.files-with-threats }}"
+        exit 1
