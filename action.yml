@@ -14,7 +14,9 @@ inputs:
     description: >
       Newline- or space-separated list of file paths to scan.
       Typically populated from the output of a changed-files step or a similar action.
-    required: true
+      Leave empty when only scanning PR or Issue comments.
+    required: false
+    default: ""
 
   on-threat:
     description: >
@@ -62,6 +64,32 @@ inputs:
     required: false
     default: "0.5.2"
 
+  clean-pr-comments:
+    description: >
+      When true, fetches all comments on the pull request that triggered this workflow
+      (both discussion comments and review comments) and scans them for ANSI/Unicode threats.
+      Requires a token with pull-requests:read (and pull-requests:write when on-threat=strip).
+      Only meaningful when the workflow is triggered by a pull_request or pull_request_review_comment event.
+    required: false
+    default: "false"
+
+  clean-issue-comments:
+    description: >
+      When true, fetches all comments on the issue that triggered this workflow and scans
+      them for ANSI/Unicode threats.
+      Requires a token with issues:read (and issues:write when on-threat=strip).
+      Only meaningful when the workflow is triggered by an issues or issue_comment event.
+    required: false
+    default: "false"
+
+  github-token:
+    description: >
+      GitHub token used to read and (when on-threat=strip) update PR/Issue comments.
+      Defaults to the built-in github.token. Only used when clean-pr-comments or
+      clean-issue-comments is true.
+    required: false
+    default: ""
+
 outputs:
   results:
     description: >
@@ -78,6 +106,25 @@ outputs:
   files-with-threats:
     description: "Newline-separated list of file paths that contained detected threats."
     value: ${{ steps.process.outputs.files-with-threats }}
+
+  comment-results:
+    description: >
+      JSON array of per-comment scan results (populated when clean-pr-comments or
+      clean-issue-comments is true).
+      Schema: [{"id":"<id>","type":"pr_comment|review_comment|issue_comment","url":"<html_url>","status":"clean|stripped|threat","output":"<stripped content>"}]
+    value: ${{ steps.process-comments.outputs.comment-results }}
+
+  comment-threat-detected:
+    description: >
+      'true' if any scanned comment contained an echoback attack vector, 'false' otherwise.
+      Only set when clean-pr-comments or clean-issue-comments is true.
+    value: ${{ steps.process-comments.outputs.comment-threat-detected }}
+
+  comments-with-threats:
+    description: >
+      Newline-separated list of comment HTML URLs that contained detected threats.
+      Only set when clean-pr-comments or clean-issue-comments is true.
+    value: ${{ steps.process-comments.outputs.comments-with-threats }}
 
 runs:
   using: composite
@@ -104,6 +151,7 @@ runs:
 
     - name: Process files
       id: process
+      if: ${{ inputs.files != '' }}
       shell: bash
       run: |
         chmod +x "${{ github.action_path }}/scripts/run.sh"
@@ -115,8 +163,24 @@ runs:
         INPUT_UNICODE_MAP: ${{ inputs.unicode-map }}
         INPUT_NO_UNICODE_MAP: ${{ inputs.no-unicode-map }}
 
+    - name: Process comments
+      id: process-comments
+      if: ${{ inputs.clean-pr-comments == 'true' || inputs.clean-issue-comments == 'true' }}
+      shell: bash
+      run: |
+        chmod +x "${{ github.action_path }}/scripts/clean-comments.sh"
+        "${{ github.action_path }}/scripts/clean-comments.sh"
+      env:
+        INPUT_GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
+        INPUT_CLEAN_PR_COMMENTS: ${{ inputs.clean-pr-comments }}
+        INPUT_CLEAN_ISSUE_COMMENTS: ${{ inputs.clean-issue-comments }}
+        INPUT_ON_THREAT: ${{ inputs.on-threat }}
+        INPUT_PRESET: ${{ inputs.preset }}
+        INPUT_UNICODE_MAP: ${{ inputs.unicode-map }}
+        INPUT_NO_UNICODE_MAP: ${{ inputs.no-unicode-map }}
+
     - name: Fail on detected threats
-      if: ${{ inputs.on-threat == 'fail' && steps.process.outputs.threat-detected == 'true' }}
+      if: ${{ inputs.on-threat == 'fail' && (steps.process.outputs.threat-detected == 'true' || steps.process-comments.outputs.comment-threat-detected == 'true') }}
       shell: bash
       run: |
         escape_annotation_property() {
@@ -143,4 +207,10 @@ runs:
             echo "::error file=${ef}::${msg}"
           fi
         done <<< "${{ steps.process.outputs.files-with-threats }}"
+        while IFS= read -r url; do
+          if [ -n "$url" ]; then
+            msg="$(escape_annotation_message "Echoback attack vector detected in comment: $url")"
+            echo "::error::${msg}"
+          fi
+        done <<< "${{ steps.process-comments.outputs.comments-with-threats }}"
         exit 1

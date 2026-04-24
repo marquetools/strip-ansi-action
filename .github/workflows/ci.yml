@@ -22,7 +22,8 @@ jobs:
         run: |
           shellcheck --severity=warning \
             strip-ansi-action/scripts/install.sh \
-            strip-ansi-action/scripts/run.sh
+            strip-ansi-action/scripts/run.sh \
+            strip-ansi-action/scripts/clean-comments.sh
 
       - name: actionlint
         uses: rhysd/actionlint@v1

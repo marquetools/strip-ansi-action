@@ -28,12 +28,15 @@ That's it. The action installs the `strip-ansi` binary, scans every file, and fa
 
 | Input | Required | Default | Description |
 |---|---|---|---|
-| `files` | **Yes** | — | Newline- or space-separated list of file paths to scan. Typically the output of [tj-actions/changed-files](https://github.com/tj-actions/changed-files). |
+| `files` | No | _(empty)_ | Newline- or space-separated list of file paths to scan. Typically the output of [tj-actions/changed-files](https://github.com/tj-actions/changed-files). Leave empty when only scanning PR/Issue comments. |
 | `on-threat` | No | `fail` | What to do when a threat is detected: `fail`, `strip`, or `warn`. See [Threat handling](#threat-handling) below. |
 | `preset` | No | `sanitize` | ANSI filter preset. One of `dumb`, `color`, `sanitize`, `tmux`, `xterm`, `full`. |
 | `unicode-map` | No | `@ascii-normalize` | Space-separated Unicode normalization sets to enable (e.g. `@ascii-normalize math-latin`). |
 | `no-unicode-map` | No | _(empty)_ | Space-separated Unicode normalization sets to disable. |
 | `version` | No | `0.5.2` | Version of `distill-strip-ansi` to install. |
+| `clean-pr-comments` | No | `false` | When `true`, fetches and scans all PR comments (discussion + review) for threats. See [Cleaning PR & Issue comments](#cleaning-pr--issue-comments). |
+| `clean-issue-comments` | No | `false` | When `true`, fetches and scans all issue comments for threats. See [Cleaning PR & Issue comments](#cleaning-pr--issue-comments). |
+| `github-token` | No | `github.token` | Token used to read (and write, when `on-threat=strip`) comments. Defaults to the built-in `github.token`. |
 
 ## Outputs
 
@@ -42,6 +45,9 @@ That's it. The action installs the `strip-ansi` binary, scans every file, and fa
 | `results` | JSON array — `[{"file":"…","status":"clean\|stripped\|threat","output":"…"}]` |
 | `threat-detected` | `"true"` if any file contained an echoback attack vector, `"false"` otherwise. |
 | `files-with-threats` | Newline-separated list of file paths that contained threats. |
+| `comment-results` | JSON array — `[{"id":"…","type":"pr_comment\|review_comment\|issue_comment","url":"…","status":"clean\|stripped\|threat","output":"…"}]` (populated when `clean-pr-comments` or `clean-issue-comments` is `true`) |
+| `comment-threat-detected` | `"true"` if any comment contained an echoback attack vector, `"false"` otherwise. |
+| `comments-with-threats` | Newline-separated list of comment HTML URLs that contained threats. |
 
 ---
 
@@ -102,6 +108,102 @@ jobs:
         with:
           files: ${{ steps.changed-files.outputs.all_changed_files }}
           unicode-map: '@ascii-normalize @japanese'
+```
+
+---
+
+## Cleaning PR & Issue Comments
+
+Set `clean-pr-comments: true` or `clean-issue-comments: true` to scan (and optionally strip threats from) GitHub PR and Issue comments.
+
+### How it works
+
+- **`clean-pr-comments: true`** — fetches every discussion comment and every review comment on the pull request that triggered the workflow and scans each body through `strip-ansi`.
+- **`clean-issue-comments: true`** — fetches every comment on the issue that triggered the workflow and scans each body through `strip-ansi`.
+- The same `on-threat` value controls what happens when a threat is found:
+  - `fail` — emits `::error::` annotations and fails the job.
+  - `warn` — emits `::warning::` annotations; the job continues.
+  - `strip` — **rewrites the comment body** via the GitHub API to remove the threat sequences; the job continues.
+
+### Required permissions
+
+| Use case | Permission needed |
+|---|---|
+| Scan PR comments (read-only) | `pull-requests: read` |
+| Strip threats from PR comments | `pull-requests: write` |
+| Scan Issue comments (read-only) | `issues: read` |
+| Strip threats from Issue comments | `issues: write` |
+
+The default `github.token` already has these permissions when the workflow runs in the same repository.
+
+### Example: scan PR comments and fail on threat
+
+```yaml
+jobs:
+  scan-pr-comments:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan PR comments for threats
+        uses: marquetools/strip-ansi-action@v1
+        with:
+          clean-pr-comments: true
+          on-threat: fail
+```
+
+### Example: strip threats from PR comments and files together
+
+```yaml
+jobs:
+  strip-threats:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+
+      - name: Strip ANSI threats from files and PR comments
+        id: strip
+        uses: marquetools/strip-ansi-action@v1
+        with:
+          files: ${{ steps.changed-files.outputs.all_changed_files }}
+          clean-pr-comments: true
+          on-threat: strip
+
+      - name: Report
+        run: |
+          echo "File threats: ${{ steps.strip.outputs.threat-detected }}"
+          echo "Comment threats: ${{ steps.strip.outputs.comment-threat-detected }}"
+```
+
+### Example: scan Issue comments only
+
+```yaml
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  scan-issue:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan issue comments for threats
+        uses: marquetools/strip-ansi-action@v1
+        with:
+          clean-issue-comments: true
+          on-threat: warn
 ```
 
 ---
