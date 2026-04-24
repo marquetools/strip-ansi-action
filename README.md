@@ -1,11 +1,13 @@
 # strip-ansi-action
 
 > **Strip ANSI escape sequences and Unicode homograph threats from PR files — fast, safe, and security-aware.**
+> **Detects and warns about specific intercepted attacks**
 
 A GitHub Action that runs [`distill-strip-ansi`](https://github.com/belt/distill-strip-ansi) against a list of files (e.g. files changed in a pull request), strips terminal control sequences, and fails the workflow if echoback attack vectors are detected.
 
 [![CI](https://github.com/marquetools/strip-ansi-action/actions/workflows/ci.yml/badge.svg)](https://github.com/marquetools/strip-ansi-action/actions/workflows/ci.yml)
-[![License: MPL-2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
+[![License: MIT](https://img.shields.io/badge/MIT-brightgreen.svg)](https://opensource.org/licenses/MIT)
+[![License: Apache-2.0](https://img.shields.io/badge/Apache%202.0-brightgreen.svg)](https://opensource.org/licenses/Apache-2.0)
 
 ---
 
@@ -52,11 +54,11 @@ jobs:
   scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Get changed files
         id: changed-files
-        uses: tj-actions/changed-files@v44
+        uses: tj-actions/changed-files@v47
 
       - name: Strip ANSI threats
         uses: marquetools/strip-ansi-action@v1
@@ -166,6 +168,13 @@ Classic examples:
 
 These sequences in a CI log file are **never legitimate**. The `sanitize` preset strips them automatically; `--check-threats` (always enabled by this action) exits with code 77 when any are found.
 
+### Prompt Attacks
+
+`distill-strip-ansi` protects against two kinds of prompt attacks -- one by default and one as configured by `strip-ansi-action`:
+
+- Invisible ANSI. Uses ANSI hidden characters to send a complete prompt instruction to any LLM that reads it. The text looks completely innocuous otherwise, and prompts can be very long and detailed. `distill-strip-ansi` protects against these by default.
+- Homograph attacks. Similarly use special unicode characters to evade filters and instruct llms to take an unwanted action. As discussed above, we turn the option on that blocks these by default.
+
 ### Supply-chain safety
 
 - **Pin to a SHA** in security-sensitive workflows: `uses: marquetools/strip-ansi-action@<sha>`
@@ -182,12 +191,6 @@ These sequences in a CI log file are **never legitimate**. The `sanitize` preset
 2. **Scan** — For each file, runs `strip-ansi --check-threats --preset=... < file > stripped`, adding `--on-threat=strip` only when `on-threat=strip`.
 3. **Report** — Collects per-file status (`clean`, `stripped`, or `threat`) into a JSON array and writes all outputs to `$GITHUB_OUTPUT`.
 4. **Gate** — If `on-threat=fail` and any threat was detected, the action emits error annotations and exits non-zero.
-
----
-
-## Marketplace Publishing
-
-> **Note:** To publish this action to the GitHub Actions Marketplace, the `action.yml` file must live at the **root** of a dedicated repository (e.g. `marquetools/strip-ansi-action`). Move the contents of the `strip-ansi-action/` directory to the root of that repository, then create a versioned release tag (e.g. `v1.0.0`). The Marketplace will pick it up automatically.
 
 ---
 
