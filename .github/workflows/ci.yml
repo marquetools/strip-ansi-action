@@ -16,17 +16,17 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
 
       - name: shellcheck
         run: |
           shellcheck --severity=warning \
-            strip-ansi-action/scripts/install.sh \
-            strip-ansi-action/scripts/run.sh \
-            strip-ansi-action/scripts/clean-comments.sh
+            scripts/install.sh \
+            scripts/run.sh \
+            scripts/clean-comments.sh
 
       - name: actionlint
-        uses: rhysd/actionlint@v1
+        uses: rhysd/actionlint@v011a6d15e749bb3f2d771eed9c7aa0e7e3e10ee7
         with:
           files: strip-ansi-action/action.yml
 
@@ -50,7 +50,7 @@ jobs:
         id: test-clean
         uses: ./strip-ansi-action
         with:
-          files: strip-ansi-action/tests/fixtures/clean.txt
+          files: tests/fixtures/clean.txt
           on-threat: warn
 
       - name: Assert clean result
@@ -67,7 +67,7 @@ jobs:
         id: test-ansi
         uses: ./strip-ansi-action
         with:
-          files: strip-ansi-action/tests/fixtures/ansi_only.txt
+          files: tests/fixtures/ansi_only.txt
           on-threat: warn
 
       - name: Assert ANSI-only result
@@ -93,7 +93,7 @@ jobs:
         id: test-threat-warn
         uses: ./strip-ansi-action
         with:
-          files: strip-ansi-action/tests/fixtures/threat.txt
+          files: tests/fixtures/threat.txt
           on-threat: warn
 
       - name: Assert warn result
@@ -111,7 +111,7 @@ jobs:
         continue-on-error: true
         uses: ./strip-ansi-action
         with:
-          files: strip-ansi-action/tests/fixtures/threat.txt
+          files: tests/fixtures/threat.txt
           on-threat: fail
 
       - name: Assert fail result
@@ -128,7 +128,7 @@ jobs:
         id: test-threat-strip
         uses: ./strip-ansi-action
         with:
-          files: strip-ansi-action/tests/fixtures/threat.txt
+          files: tests/fixtures/threat.txt
           on-threat: strip
 
       - name: Assert strip result
