@@ -287,7 +287,7 @@ PYEOF
       rm -f "${body_file}"
 
       local entry
-      entry="{\"id\":$(json_string "${id}"),\"type\":\"${comment_type}\",\"url\":$(json_string "${html_url}"),\"status\":\"clean\",\"output\":\"\"}"
+      entry="$(build_comment_entry "${id}" "${comment_type}" "${html_url}" "clean" '""')"
       _append_entry "${entry}"
       continue
     fi
@@ -359,7 +359,7 @@ PYEOF
     rm -f "${body_file}" "${out_file}"
 
     local entry
-    entry="{\"id\":$(json_string "${id}"),\"type\":\"${comment_type}\",\"url\":$(json_string "${html_url}"),\"status\":\"${status}\",\"output\":${out_json}}"
+    entry="$(build_comment_entry "${id}" "${comment_type}" "${html_url}" "${status}" "${out_json}")"
     _append_entry "${entry}"
 
   done < <("${PYTHON}" - "${json_file}" <<'PYEOF'
@@ -370,6 +370,13 @@ for c in data:
     print(str(c['id']) + '\t' + (c.get('html_url') or ''))
 PYEOF
 )
+}
+
+# Build a JSON result entry for a single comment.
+# Args: id, comment_type, html_url, status, out_json
+build_comment_entry() {
+  local id="$1" comment_type="$2" html_url="$3" status="$4" out_json="$5"
+  echo "{\"id\":$(json_string "${id}"),\"type\":\"${comment_type}\",\"url\":$(json_string "${html_url}"),\"status\":\"${status}\",\"output\":${out_json}}"
 }
 
 # Append a JSON entry to COMMENT_RESULTS_JSON, honouring the global size cap.
@@ -451,9 +458,9 @@ COMMENT_RESULTS_JSON+="]"
 # Emit outputs to GITHUB_OUTPUT
 # ---------------------------------------------------------------------------
 
-CWT_DELIM="_STRIP_ANSI_COMMENTS_EOF_${$}_${RANDOM}${RANDOM}"
+CWT_DELIM="_STRIP_ANSI_COMMENTS_EOF_${$}_${GITHUB_RUN_ID:-0}_${RANDOM}${RANDOM}"
 while printf '%s\n' "${COMMENTS_WITH_THREATS}" | grep -Fqx "${CWT_DELIM}"; do
-  CWT_DELIM="_STRIP_ANSI_COMMENTS_EOF_${$}_${RANDOM}${RANDOM}"
+  CWT_DELIM="_STRIP_ANSI_COMMENTS_EOF_${$}_${GITHUB_RUN_ID:-0}_${RANDOM}${RANDOM}"
 done
 
 {
