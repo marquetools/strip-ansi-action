@@ -42,7 +42,7 @@ jobs:
   clean-comments:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Strip ANSI from comments
         uses: marquetools/strip-ansi-action@v1
         with:
