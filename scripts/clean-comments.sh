@@ -302,7 +302,20 @@ process_comments_file() {
       fi
 
     elif [ "${exit_code}" -eq 0 ]; then
-      if ! diff -q "${body_file}" "${out_file}" &>/dev/null; then
+      # When on-threat=strip the binary exits 0 even for content that contained
+      # threats (it strips them and emits [strip-ansi:threat] lines to stderr).
+      # Detect that case so comment-threat-detected and comments-with-threats
+      # are populated correctly.
+      if [ "${ON_THREAT}" = "strip" ] && printf '%s\n' "${stderr_out}" | grep -q '^\[strip-ansi:threat\]'; then
+        status="threat"
+        THREAT_DETECTED=true
+        COMMENTS_WITH_THREATS+="${html_url}"$'\n'
+        if update_comment "${update_base}/${id}" "${out_file}"; then
+          log "Updated ${comment_type} ${id} to remove threats."
+        else
+          echo "::warning::Failed to update ${comment_type} ${id} via API." >&2
+        fi
+      elif ! diff -q "${body_file}" "${out_file}" &>/dev/null; then
         status="stripped"
         if [ "${ON_THREAT}" = "strip" ]; then
           if update_comment "${update_base}/${id}" "${out_file}"; then

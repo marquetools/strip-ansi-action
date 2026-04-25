@@ -189,8 +189,8 @@ permissions:
 | `files` | No | _(empty)_ | Newline- or space-separated list of file paths to scan. Typically the output of [tj-actions/changed-files](https://github.com/tj-actions/changed-files). Leave empty when only scanning PR/Issue comments. |
 | `on-threat` | No | `fail` | What to do when a threat is detected: `fail`, `strip`, or `warn`. See [Threat handling](#threat-handling) below. |
 | `preset` | No | `sanitize` | ANSI filter preset. One of `dumb`, `color`, `sanitize`, `tmux`, `xterm`, `full`. |
-| `unicode-map` | No | `@ascii-normalize` | Space-separated Unicode normalization sets to enable (e.g. `@ascii-normalize math-latin`). |
-| `no-unicode-map` | No | _(empty)_ | Space-separated Unicode normalization sets to disable. |
+| `unicode-map` | No | _(reserved)_ | Reserved for a future release of `distill-strip-ansi`. Has no effect with the current version. |
+| `no-unicode-map` | No | _(reserved)_ | Reserved for a future release of `distill-strip-ansi`. Has no effect with the current version. |
 | `version` | No | `0.5.2` | Version of `distill-strip-ansi` to install. |
 | `clean-pr-comments` | No | `false` | When `true`, fetches and scans all PR comments (discussion + review) for threats. See [Cleaning PR & Issue comments](#cleaning-pr--issue-comments). |
 | `clean-issue-comments` | No | `false` | When `true`, fetches and scans all issue comments for threats. See [Cleaning PR & Issue comments](#cleaning-pr--issue-comments). |
@@ -247,26 +247,10 @@ jobs:
         run: echo "Threats present: ${{ steps.strip.outputs.threat-detected }}"
 ```
 
-### Disable unicode normalization for generated/binary files
 
-```yaml
-      - name: Scan without unicode normalization
-        uses: marquetools/strip-ansi-action@v1
-        with:
-          files: generated/output.log
-          on-threat: warn
-          no-unicode-map: '@ascii-normalize'
-```
+### Unicode normalization
 
-### Add Japanese canonicalization alongside the defaults
-
-```yaml
-      - name: Scan with extended unicode normalization
-        uses: marquetools/strip-ansi-action@v1
-        with:
-          files: ${{ steps.changed-files.outputs.all_changed_files }}
-          unicode-map: '@ascii-normalize @japanese'
-```
+Unicode normalization (homograph detection) will be configurable via `unicode-map` and `no-unicode-map` inputs in a future release of `distill-strip-ansi`. These inputs are accepted by the action today but have no effect with the current binary version.
 
 ---
 
