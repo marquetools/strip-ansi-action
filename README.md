@@ -328,4 +328,4 @@ These sequences in a CI log file are **never legitimate**. The `sanitize` preset
 
 ## License
 
-[Mozilla Public License 2.0](LICENSE) — © 2026 Knitli Inc.
+You pick: [MIT](./LICENSE-MIT) or [Apache-2.0](./LICENSE-Apache-2.0) — © 2026 Knitli Inc.
