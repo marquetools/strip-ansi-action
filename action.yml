@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
 name: "Strip ANSI & Unicode Threats"
 description: >
-  Strips ANSI escape sequences and Unicode homograph threats from a list of files.
-  Fails, warns, or silently strips when echoback attack vectors are detected.
+  Strips ANSI escape sequences and Unicode homograph threats from PR files and GitHub comments.
+  Auto-cleans LLM-polluted PR descriptions and issue comments (set on-threat: strip).
+  Detects and blocks echoback attack vectors (terminal keystroke injection via ANSI sequences).
 author: "Knitli Inc."
 branding:
   icon: "shield"

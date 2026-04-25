@@ -1,11 +1,16 @@
 # strip-ansi-action
 
 > **Strip ANSI escape sequences and Unicode homograph threats from PR files and comments — fast, safe, and security-aware.**
-> **Detects and warns about specific intercepted attacks**
+> **Auto-cleans LLM-polluted comments and detects echoback attack vectors.**
 
 A GitHub Action that runs [`distill-strip-ansi`](https://github.com/belt/distill-strip-ansi) against pull request files and GitHub comments, strips terminal control sequences, and fails the workflow if echoback attack vectors are detected.
 
-It protects three surfaces in one action:
+It covers two important use cases:
+
+- **Cleaning LLM-polluted content** — LLMs frequently paste raw dev-tool output (with ANSI color codes) directly into PR descriptions and issue comments, turning readable text into `[0;32m✔[0m Built successfully`. This action auto-strips those sequences so comments stay readable.
+- **Security protection** — Certain ANSI/VT sequences can cause terminals to echo data back into their own input stream, enabling keystroke injection or data exfiltration when a developer views CI output. This action detects and blocks those attack vectors.
+
+It covers three surfaces in one action:
 
 - **Changed files** — scans every file touched by a pull request.
 - **PR comments** — scans (and optionally rewrites) PR discussion and review comments.
@@ -18,6 +23,32 @@ It protects three surfaces in one action:
 ---
 
 ## Quick Start
+
+**Auto-clean LLM-polluted PR comments** (rewrites comments in place — requires `pull-requests: write`):
+
+```yaml
+on:
+  pull_request_review_comment:
+    types: [created, edited]
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  pull-requests: write   # needed to rewrite PR comment bodies
+  issues: write          # needed to rewrite issue comment bodies
+
+jobs:
+  clean-comments:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Strip ANSI from comments
+        uses: marquetools/strip-ansi-action@v1
+        with:
+          clean-pr-comments: ${{ github.event_name == 'pull_request_review_comment' }}
+          clean-issue-comments: ${{ github.event_name == 'issue_comment' }}
+          on-threat: strip   # rewrites the comment body in place
+```
 
 **Scan changed files in a PR:**
 
@@ -51,6 +82,102 @@ It protects three surfaces in one action:
 The action installs the `strip-ansi` binary, scans the requested surfaces, and fails the job (or warns/strips, depending on `on-threat`) when an echoback attack vector is found.
 
 > **Want everything in one file?** See [Full Protection Workflow](#full-protection-workflow) below for a copy-paste workflow that covers all three surfaces and all relevant event types.
+
+---
+
+## Cleaning LLM-Polluted PRs & Issues
+
+LLMs frequently copy-paste raw terminal output — build logs, test runners, linters — directly into PR descriptions and issue comments. The resulting ANSI color codes clutter comment bodies with noise like `[0;32m✔[0m Built in 2.3s` or `←[31mError←[0m: type mismatch`.
+
+This action solves that automatically: set `on-threat: strip` and it will silently rewrite polluted comments via the GitHub API as soon as they are created or edited.
+
+### Required permissions
+
+| What you want to do | Permissions required |
+|---|---|
+| Read and scan PR comments only | `pull-requests: read` |
+| Auto-clean (rewrite) PR comments | `pull-requests: write` |
+| Read and scan issue comments only | `issues: read` |
+| Auto-clean (rewrite) issue comments | `issues: write` |
+
+> **Note:** The default `github.token` already has `read` permissions on both surfaces. You only need to declare `write` permissions when you want the action to rewrite comment bodies with `on-threat: strip`.
+
+### Copy-paste workflow: auto-clean every new or edited comment
+
+Save this as `.github/workflows/clean-ansi-comments.yml`:
+
+```yaml
+name: Clean ANSI from comments
+
+on:
+  issue_comment:
+    types: [created, edited]
+  pull_request_review_comment:
+    types: [created, edited]
+  pull_request_review:
+    types: [submitted, edited]
+
+# Grant write access so the action can rewrite polluted comment bodies.
+# If you only want to detect (not fix) pollution, change both to 'read'.
+permissions:
+  contents: read
+  issues: write          # rewrite issue comment bodies
+  pull-requests: write   # rewrite PR comment bodies
+
+jobs:
+  clean-comments:
+    name: Strip ANSI from comment
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Strip ANSI from comment
+        id: clean
+        uses: marquetools/strip-ansi-action@v1
+        with:
+          clean-pr-comments: >-
+            ${{ github.event_name == 'pull_request_review_comment' ||
+                github.event_name == 'pull_request_review' ||
+                (github.event_name == 'issue_comment' && github.event.issue.pull_request != null) }}
+          clean-issue-comments: >-
+            ${{ github.event_name == 'issue_comment' &&
+                github.event.issue.pull_request == null }}
+          on-threat: strip   # silently rewrites the comment body in place
+
+      - name: Report
+        if: steps.clean.outputs.comment-threat-detected == 'true'
+        run: |
+          echo "Cleaned ANSI from these comments:"
+          echo "${{ steps.clean.outputs.comments-with-threats }}"
+```
+
+**How it behaves:**
+
+| Event | Comments cleaned |
+|---|---|
+| `issue_comment` on a PR | PR discussion comments |
+| `issue_comment` on an issue | Issue comments |
+| `pull_request_review_comment` | PR review (inline) comments |
+| `pull_request_review` | PR review submission comments |
+
+### If you only want to detect, not auto-fix
+
+Use `on-threat: warn` and downgrade permissions to read-only:
+
+```yaml
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+```
+
+```yaml
+      - uses: marquetools/strip-ansi-action@v1
+        with:
+          clean-pr-comments: true
+          clean-issue-comments: true
+          on-threat: warn   # logs warnings; does NOT rewrite comment bodies
+```
 
 ---
 
