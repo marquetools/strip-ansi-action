@@ -48,7 +48,7 @@ jobs:
       # --- Test 1: clean file → no threat ---
       - name: 'Test: clean file (expect threat-detected=false)'
         id: test-clean
-        uses: .
+        uses: ./
         with:
           files: tests/fixtures/clean.txt
           on-threat: warn
@@ -65,7 +65,7 @@ jobs:
       # --- Test 2: ANSI-only file → stripped, no threat ---
       - name: 'Test: ANSI-only file (expect status=stripped, threat-detected=false)'
         id: test-ansi
-        uses: .
+        uses: ./
         with:
           files: tests/fixtures/ansi_only.txt
           on-threat: warn
@@ -91,7 +91,7 @@ jobs:
       # --- Test 3: threat file + on-threat=warn → threat-detected=true, step succeeds ---
       - name: 'Test: threat file with on-threat=warn (expect threat-detected=true, step succeeds)'
         id: test-threat-warn
-        uses: .
+        uses: ./
         with:
           files: tests/fixtures/threat.txt
           on-threat: warn
@@ -109,7 +109,7 @@ jobs:
       - name: 'Test: threat file with on-threat=fail (expect step failure)'
         id: test-threat-fail
         continue-on-error: true
-        uses: .
+        uses: ./
         with:
           files: tests/fixtures/threat.txt
           on-threat: fail
@@ -126,7 +126,7 @@ jobs:
       # --- Test 5: threat file + on-threat=strip → threat-detected=true, step succeeds ---
       - name: 'Test: threat file with on-threat=strip (expect threat-detected=true, step succeeds)'
         id: test-threat-strip
-        uses: .
+        uses: ./
         with:
           files: tests/fixtures/threat.txt
           on-threat: strip
