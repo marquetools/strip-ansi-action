@@ -71,6 +71,8 @@ jobs:
           on-threat: warn
 
       - name: Assert ANSI-only result
+        env:
+          RESULTS_JSON: ${{ steps.test-ansi.outputs.results }}
         shell: bash
         run: |
           if [ "${{ steps.test-ansi.outputs.threat-detected }}" != "false" ]; then
@@ -78,8 +80,8 @@ jobs:
             exit 1
           fi
           # Verify the results JSON contains status=stripped or clean.
-          # Pass via env var to avoid shell-quoting issues with single quotes in content.
-          RESULTS_JSON="${{ steps.test-ansi.outputs.results }}" python3 -c "
+          # RESULTS_JSON is set via env: so GitHub Actions handles quoting correctly.
+          python3 -c "
           import os, json
           results = json.loads(os.environ['RESULTS_JSON'])
           assert results, 'results must not be empty'
