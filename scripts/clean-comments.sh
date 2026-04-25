@@ -7,8 +7,6 @@
 #   INPUT_CLEAN_ISSUE_COMMENTS  — true | false
 #   INPUT_ON_THREAT             — fail | strip | warn
 #   INPUT_PRESET                — dumb | color | sanitize | tmux | xterm | full
-#   INPUT_UNICODE_MAP           — space-separated --unicode-map tokens
-#   INPUT_NO_UNICODE_MAP        — space-separated --no-unicode-map tokens
 #   GITHUB_REPOSITORY           — owner/repo
 #   GITHUB_EVENT_PATH           — path to the event JSON file
 #   GITHUB_API_URL              — base URL for the GitHub API
@@ -26,8 +24,6 @@ set -euo pipefail
 
 ON_THREAT="${INPUT_ON_THREAT:-fail}"
 PRESET="${INPUT_PRESET:-sanitize}"
-UNICODE_MAP="${INPUT_UNICODE_MAP:-@ascii-normalize}"
-NO_UNICODE_MAP="${INPUT_NO_UNICODE_MAP:-}"
 GITHUB_TOKEN="${INPUT_GITHUB_TOKEN:-}"
 CLEAN_PR_COMMENTS="${INPUT_CLEAN_PR_COMMENTS:-false}"
 CLEAN_ISSUE_COMMENTS="${INPUT_CLEAN_ISSUE_COMMENTS:-false}"
@@ -132,22 +128,6 @@ build_flags() {
 
   if [ "${ON_THREAT}" = "strip" ]; then
     FLAGS+=("--on-threat=strip")
-  fi
-
-  if [ -n "${UNICODE_MAP}" ]; then
-    set -f
-    for token in ${UNICODE_MAP}; do
-      FLAGS+=("--unicode-map" "${token}")
-    done
-    set +f
-  fi
-
-  if [ -n "${NO_UNICODE_MAP}" ]; then
-    set -f
-    for token in ${NO_UNICODE_MAP}; do
-      FLAGS+=("--no-unicode-map" "${token}")
-    done
-    set +f
   fi
 }
 
