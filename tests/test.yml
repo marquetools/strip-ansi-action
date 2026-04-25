@@ -38,7 +38,6 @@ jobs:
           files: ${{ steps.changed-files.outputs.all_changed_files }}
           on-threat: fail
           preset: sanitize
-          unicode-map: '@ascii-normalize'
 
       # Report the scan results (runs even if the scan step fails).
       - name: Report results
@@ -80,16 +79,17 @@ jobs:
           echo "Results JSON available in steps.strip.outputs.results"
 
   # ---------------------------------------------------------------------------
-  # Example: disable unicode normalization for binary/generated files
+  # Example: scan files (unicode-map and no-unicode-map inputs are reserved
+  # for a future release; they are accepted but have no effect today)
   # ---------------------------------------------------------------------------
-  scan-without-unicode-normalization:
-    name: Scan (no unicode normalization)
+  scan-files:
+    name: Scan files
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Scan generated files (ANSI threats only, no unicode normalization)
+      - name: Scan files
         uses: marquetools/strip-ansi-action@v1
         with:
           files: |
@@ -97,4 +97,3 @@ jobs:
             strip-ansi-action/tests/fixtures/ansi_only.txt
           on-threat: warn
           preset: sanitize
-          no-unicode-map: '@ascii-normalize'

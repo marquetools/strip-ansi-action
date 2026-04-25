@@ -2,11 +2,9 @@
 # run.sh — Process a list of files through strip-ansi and emit GitHub Actions outputs.
 #
 # Environment variables consumed (all set from action.yml inputs):
-#   INPUT_FILES          — newline- or space-separated file paths
-#   INPUT_ON_THREAT      — fail | strip | warn
-#   INPUT_PRESET         — dumb | color | sanitize | tmux | xterm | full
-#   INPUT_UNICODE_MAP    — space-separated --unicode-map tokens (e.g. "@ascii-normalize math-latin")
-#   INPUT_NO_UNICODE_MAP — space-separated --no-unicode-map tokens
+#   INPUT_FILES     — newline- or space-separated file paths
+#   INPUT_ON_THREAT — fail | strip | warn
+#   INPUT_PRESET    — dumb | color | sanitize | tmux | xterm | full
 #
 # Outputs written to $GITHUB_OUTPUT:
 #   results              — JSON array of {file, status, output}
@@ -21,8 +19,6 @@ set -euo pipefail
 
 ON_THREAT="${INPUT_ON_THREAT:-fail}"
 PRESET="${INPUT_PRESET:-sanitize}"
-UNICODE_MAP="${INPUT_UNICODE_MAP:-@ascii-normalize}"
-NO_UNICODE_MAP="${INPUT_NO_UNICODE_MAP:-}"
 
 # Use RUNNER_TEMP when available (GitHub-hosted runners); fall back to /tmp.
 WORK_DIR="${RUNNER_TEMP:-/tmp}/strip-ansi-$$"
@@ -97,24 +93,6 @@ build_flags() {
 
   if [ "${ON_THREAT}" = "strip" ]; then
     FLAGS+=("--on-threat=strip")
-  fi
-
-  # Disable glob expansion while splitting the token strings so that tokens
-  # containing glob characters (e.g. '*') are never expanded to file paths.
-  if [ -n "${UNICODE_MAP}" ]; then
-    set -f
-    for token in ${UNICODE_MAP}; do
-      FLAGS+=("--unicode-map" "${token}")
-    done
-    set +f
-  fi
-
-  if [ -n "${NO_UNICODE_MAP}" ]; then
-    set -f
-    for token in ${NO_UNICODE_MAP}; do
-      FLAGS+=("--no-unicode-map" "${token}")
-    done
-    set +f
   fi
 }
 
@@ -229,8 +207,17 @@ for file in "${FILES[@]}"; do
     [ "${ON_THREAT}" != "strip" ] && output_path=""
 
   elif [ "${exit_code}" -eq 0 ]; then
-    # Detect whether any bytes were actually changed.
-    if ! diff -q "${file}" "${out_file}" &>/dev/null; then
+    # When on-threat=strip the binary exits 0 even when threats are present
+    # (it strips them and emits one [strip-ansi:threat] line per threat to stderr).
+    # Detect that case so we can set threat-detected=true and populate
+    # files-with-threats correctly.
+    if [ "${ON_THREAT}" = "strip" ] && printf '%s\n' "${stderr_out}" | grep -q '^\[strip-ansi:threat\]'; then
+      THREAT_DETECTED=true
+      FILES_WITH_THREATS+="${file}"$'\n'
+      status="threat"
+      # output_path already points to the stripped output; leave it set so the
+      # threat-stripped content is included in the results JSON.
+    elif ! diff -q "${file}" "${out_file}" &>/dev/null; then
       status="stripped"
     fi
 

@@ -31,19 +31,15 @@ inputs:
 
   unicode-map:
     description: >
-      Space-separated list of Unicode normalization sets to enable. Accepts @tag shorthand
-      (e.g. @ascii-normalize, @japanese), a shipped file name (e.g. math-latin), or a path to
-      a custom TOML mapping file. If provided, this replaces the default map set; if left empty,
-      the default is @ascii-normalize. Passed to distill-strip-ansi as one --unicode-map flag
-      per token.
+      Reserved for a future release of distill-strip-ansi that will support
+      Unicode normalization map selection. Has no effect with the current version.
     required: false
-    default: "@ascii-normalize"
+    default: ""
 
   no-unicode-map:
     description: >
-      Space-separated list of Unicode normalization sets to disable.
-      Accepts the same values as unicode-map. Passed as --no-unicode-map flags.
-      Leave empty to keep all defaults enabled.
+      Reserved for a future release of distill-strip-ansi that will support
+      Unicode normalization map selection. Has no effect with the current version.
     required: false
     default: ""
 
@@ -161,8 +157,6 @@ runs:
         INPUT_FILES: ${{ inputs.files }}
         INPUT_ON_THREAT: ${{ inputs.on-threat }}
         INPUT_PRESET: ${{ inputs.preset }}
-        INPUT_UNICODE_MAP: ${{ inputs.unicode-map }}
-        INPUT_NO_UNICODE_MAP: ${{ inputs.no-unicode-map }}
 
     - name: Process comments
       id: process-comments
@@ -177,8 +171,6 @@ runs:
         INPUT_CLEAN_ISSUE_COMMENTS: ${{ inputs.clean-issue-comments }}
         INPUT_ON_THREAT: ${{ inputs.on-threat }}
         INPUT_PRESET: ${{ inputs.preset }}
-        INPUT_UNICODE_MAP: ${{ inputs.unicode-map }}
-        INPUT_NO_UNICODE_MAP: ${{ inputs.no-unicode-map }}
 
     - name: Fail on detected threats
       if: ${{ inputs.on-threat == 'fail' && (steps.process.outputs.threat-detected == 'true' || steps.process-comments.outputs.comment-threat-detected == 'true') }}
