@@ -163,8 +163,11 @@ permissions:
   contents: read
   issues: read
   pull-requests: read
-  # Add 'issues: write' and/or 'pull-requests: write' here if you want the
-  # action to rewrite comment bodies when on-threat is set to 'strip'.
+  # If you set on-threat to 'strip', add the write permissions needed for
+  # the comment surfaces you enable:
+  # - clean-issue-comments: issues: write
+  # - clean-pr-comments: issues: write and pull-requests: write
+  #   (to rewrite both PR discussion comments and PR review comments)
 
 jobs:
   scan:
