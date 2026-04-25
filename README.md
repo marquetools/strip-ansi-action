@@ -1,9 +1,15 @@
 # strip-ansi-action
 
-> **Strip ANSI escape sequences and Unicode homograph threats from PR files — fast, safe, and security-aware.**
+> **Strip ANSI escape sequences and Unicode homograph threats from PR files and comments — fast, safe, and security-aware.**
 > **Detects and warns about specific intercepted attacks**
 
-A GitHub Action that runs [`distill-strip-ansi`](https://github.com/belt/distill-strip-ansi) against a list of files (e.g. files changed in a pull request), strips terminal control sequences, and fails the workflow if echoback attack vectors are detected.
+A GitHub Action that runs [`distill-strip-ansi`](https://github.com/belt/distill-strip-ansi) against pull request files and GitHub comments, strips terminal control sequences, and fails the workflow if echoback attack vectors are detected.
+
+It protects three surfaces in one action:
+
+- **Changed files** — scans every file touched by a pull request.
+- **PR comments** — scans (and optionally rewrites) PR discussion and review comments.
+- **Issue comments** — scans (and optionally rewrites) comments on GitHub issues.
 
 [![CI](https://github.com/marquetools/strip-ansi-action/actions/workflows/ci.yml/badge.svg)](https://github.com/marquetools/strip-ansi-action/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/MIT-brightgreen.svg)](https://opensource.org/licenses/MIT)
@@ -13,6 +19,8 @@ A GitHub Action that runs [`distill-strip-ansi`](https://github.com/belt/distill
 
 ## Quick Start
 
+**Scan changed files in a PR:**
+
 ```yaml
 - name: Scan changed files for ANSI threats
   uses: marquetools/strip-ansi-action@v1
@@ -20,7 +28,29 @@ A GitHub Action that runs [`distill-strip-ansi`](https://github.com/belt/distill
     files: ${{ steps.changed-files.outputs.all_changed_files }}
 ```
 
-That's it. The action installs the `strip-ansi` binary, scans every file, and fails the job if an echoback attack vector is found.
+**Scan PR comments on every comment event:**
+
+```yaml
+- name: Scan PR comment for ANSI threats
+  uses: marquetools/strip-ansi-action@v1
+  with:
+    clean-pr-comments: true
+    on-threat: warn
+```
+
+**Scan issue comments on every comment event:**
+
+```yaml
+- name: Scan issue comment for ANSI threats
+  uses: marquetools/strip-ansi-action@v1
+  with:
+    clean-issue-comments: true
+    on-threat: warn
+```
+
+The action installs the `strip-ansi` binary, scans the requested surfaces, and fails the job (or warns/strips, depending on `on-threat`) when an echoback attack vector is found.
+
+> **Want everything in one file?** See [Full Protection Workflow](#full-protection-workflow) below for a copy-paste workflow that covers all three surfaces and all relevant event types.
 
 ---
 
@@ -109,6 +139,100 @@ jobs:
           files: ${{ steps.changed-files.outputs.all_changed_files }}
           unicode-map: '@ascii-normalize @japanese'
 ```
+
+---
+
+## Full Protection Workflow
+
+Copy this workflow into `.github/workflows/ansi-protection.yml` to enable full ANSI and Unicode threat scanning across all three surfaces — changed PR files, PR comments, and issue comments — in a single file.
+
+```yaml
+name: ANSI & Unicode Threat Protection
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created, edited]
+  pull_request_review_comment:
+    types: [created, edited]
+  pull_request_review:
+    types: [submitted, edited]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  # If you set on-threat to 'strip', add the write permissions needed for
+  # the comment surfaces you enable:
+  # - clean-issue-comments: issues: write
+  # - clean-pr-comments: issues: write and pull-requests: write
+  #   (to rewrite both PR discussion comments and PR review comments)
+
+jobs:
+  scan:
+    name: Scan for ANSI/Unicode threats
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Only needed for pull_request events; skipped automatically on comment events.
+      - name: Get changed files
+        id: changed-files
+        if: github.event_name == 'pull_request'
+        uses: tj-actions/changed-files@v47
+
+      - name: Scan for ANSI/Unicode threats
+        id: scan
+        uses: marquetools/strip-ansi-action@v1
+        with:
+          # Scan changed files on pull_request events; empty on comment events (no-op).
+          files: ${{ steps.changed-files.outputs.all_changed_files }}
+
+          # Scan PR discussion + review comments on PR events, including
+          # issue_comment events when the comment belongs to a pull request.
+          clean-pr-comments: >-
+            ${{ github.event_name == 'pull_request' ||
+                github.event_name == 'pull_request_review_comment' ||
+                github.event_name == 'pull_request_review' ||
+                (github.event_name == 'issue_comment' && github.event.issue.pull_request) }}
+
+          # Scan issue comments only for real issues, not PR issue_comment events.
+          clean-issue-comments: >-
+            ${{ github.event_name == 'issue_comment' &&
+                github.event.issue.pull_request == null }}
+
+          # Change to 'fail' to block on threat, or 'strip' to auto-clean comment bodies.
+          on-threat: warn
+          preset: sanitize
+
+      - name: Report
+        if: always()
+        run: |
+          echo "File threats:    ${{ steps.scan.outputs.threat-detected }}"
+          echo "Comment threats: ${{ steps.scan.outputs.comment-threat-detected }}"
+          if [ "${{ steps.scan.outputs.threat-detected }}" = "true" ]; then
+            echo "Files with threats:"
+            echo "${{ steps.scan.outputs.files-with-threats }}"
+          fi
+          if [ "${{ steps.scan.outputs.comment-threat-detected }}" = "true" ]; then
+            echo "Comments with threats:"
+            echo "${{ steps.scan.outputs.comments-with-threats }}"
+          fi
+```
+
+**How event routing works:**
+
+| Trigger event | Files scanned | PR comments scanned | Issue comments scanned |
+|---|---|---|---|
+| `pull_request` | ✅ Changed files | ✅ All PR comments | — |
+| `pull_request_review_comment` | — | ✅ All PR comments | — |
+| `pull_request_review` | — | ✅ All PR comments | — |
+| `issue_comment` on a PR | — | ✅ All PR comments | — |
+| `issue_comment` on an issue | — | — | ✅ All issue comments |
+
+To auto-clean threats instead of warning, set `on-threat: strip` and upgrade the permissions to `pull-requests: write` and/or `issues: write`.
 
 ---
 
