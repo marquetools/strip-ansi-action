@@ -130,7 +130,7 @@ jobs:
     name: Strip ANSI from comment
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Strip ANSI from comment
         id: clean
@@ -287,7 +287,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # Only needed for pull_request events; skipped automatically on comment events.
       - name: Get changed files
@@ -381,7 +381,7 @@ jobs:
     permissions:
       pull-requests: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Scan PR comments for threats
         uses: marquetools/strip-ansi-action@v1
@@ -400,7 +400,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Get changed files
         id: changed-files
@@ -433,7 +433,7 @@ jobs:
     permissions:
       issues: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Scan issue comments for threats
         uses: marquetools/strip-ansi-action@v1
@@ -464,7 +464,7 @@ jobs:
   scan-comment:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: marquetools/strip-ansi-action@v1
         with:
           clean-pr-comments: ${{ github.event_name == 'pull_request_review_comment' }}
