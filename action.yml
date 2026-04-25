@@ -3,7 +3,7 @@
 name: "Strip ANSI & Unicode Threats"
 description: >
   Strips ANSI escape sequences and Unicode homograph threats from PR files and GitHub comments.
-  Auto-cleans LLM-polluted PR descriptions and issue comments (set on-threat: strip).
+  Auto-cleans LLM-polluted PR/issue comments (set on-threat: strip).
   Detects and blocks echoback attack vectors (terminal keystroke injection via ANSI sequences).
 author: "Knitli Inc."
 branding:

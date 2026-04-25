@@ -34,7 +34,8 @@ on:
     types: [created, edited]
 
 permissions:
-  pull-requests: write   # needed to rewrite PR comment bodies
+  contents: read
+  pull-requests: write   # needed to rewrite PR comment bodies (discussion + review)
   issues: write          # needed to rewrite issue comment bodies
 
 jobs:
@@ -45,8 +46,8 @@ jobs:
       - name: Strip ANSI from comments
         uses: marquetools/strip-ansi-action@v1
         with:
-          clean-pr-comments: ${{ github.event_name == 'pull_request_review_comment' }}
-          clean-issue-comments: ${{ github.event_name == 'issue_comment' }}
+          clean-pr-comments: ${{ github.event_name == 'pull_request_review_comment' || (github.event_name == 'issue_comment' && github.event.issue.pull_request) }}
+          clean-issue-comments: ${{ github.event_name == 'issue_comment' && !github.event.issue.pull_request }}
           on-threat: strip   # rewrites the comment body in place
 ```
 
@@ -95,12 +96,12 @@ This action solves that automatically: set `on-threat: strip` and it will silent
 
 | What you want to do | Permissions required |
 |---|---|
-| Read and scan PR comments only | `pull-requests: read` |
-| Auto-clean (rewrite) PR comments | `pull-requests: write` |
+| Read and scan PR comments only | `pull-requests: read` and `issues: read` |
+| Auto-clean (rewrite) PR comments | `pull-requests: write` and `issues: write` |
 | Read and scan issue comments only | `issues: read` |
 | Auto-clean (rewrite) issue comments | `issues: write` |
 
-> **Note:** The default `github.token` already has `read` permissions on both surfaces. You only need to declare `write` permissions when you want the action to rewrite comment bodies with `on-threat: strip`.
+> **Note:** The default `github.token` often has `read` access on both surfaces, but that can be restricted by repository, organization, or workflow `permissions` settings. For detection-only workflows, explicitly set `pull-requests: read` and/or `issues: read` to ensure predictable access. You only need `write` permissions when you want the action to rewrite comment bodies with `on-threat: strip`.
 
 ### Copy-paste workflow: auto-clean every new or edited comment
 
