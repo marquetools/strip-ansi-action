@@ -16,18 +16,19 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
 
       - name: shellcheck
         run: |
           shellcheck --severity=warning \
-            strip-ansi-action/scripts/install.sh \
-            strip-ansi-action/scripts/run.sh
+            scripts/install.sh \
+            scripts/run.sh \
+            scripts/clean-comments.sh
 
       - name: actionlint
-        uses: rhysd/actionlint@v1
+        uses: rhysd/actionlint@011a6d15e749bb3f2d771eed9c7aa0e7e3e10ee7
         with:
-          files: strip-ansi-action/action.yml
+          files: action.yml
 
   # ---------------------------------------------------------------------------
   # Job 2: Cross-platform integration tests
@@ -47,9 +48,9 @@ jobs:
       # --- Test 1: clean file → no threat ---
       - name: 'Test: clean file (expect threat-detected=false)'
         id: test-clean
-        uses: ./strip-ansi-action
+        uses: ./
         with:
-          files: strip-ansi-action/tests/fixtures/clean.txt
+          files: tests/fixtures/clean.txt
           on-threat: warn
 
       - name: Assert clean result
@@ -64,9 +65,9 @@ jobs:
       # --- Test 2: ANSI-only file → stripped, no threat ---
       - name: 'Test: ANSI-only file (expect status=stripped, threat-detected=false)'
         id: test-ansi
-        uses: ./strip-ansi-action
+        uses: ./
         with:
-          files: strip-ansi-action/tests/fixtures/ansi_only.txt
+          files: tests/fixtures/ansi_only.txt
           on-threat: warn
 
       - name: Assert ANSI-only result
@@ -90,9 +91,9 @@ jobs:
       # --- Test 3: threat file + on-threat=warn → threat-detected=true, step succeeds ---
       - name: 'Test: threat file with on-threat=warn (expect threat-detected=true, step succeeds)'
         id: test-threat-warn
-        uses: ./strip-ansi-action
+        uses: ./
         with:
-          files: strip-ansi-action/tests/fixtures/threat.txt
+          files: tests/fixtures/threat.txt
           on-threat: warn
 
       - name: Assert warn result
@@ -108,9 +109,9 @@ jobs:
       - name: 'Test: threat file with on-threat=fail (expect step failure)'
         id: test-threat-fail
         continue-on-error: true
-        uses: ./strip-ansi-action
+        uses: ./
         with:
-          files: strip-ansi-action/tests/fixtures/threat.txt
+          files: tests/fixtures/threat.txt
           on-threat: fail
 
       - name: Assert fail result
@@ -125,9 +126,9 @@ jobs:
       # --- Test 5: threat file + on-threat=strip → threat-detected=true, step succeeds ---
       - name: 'Test: threat file with on-threat=strip (expect threat-detected=true, step succeeds)'
         id: test-threat-strip
-        uses: ./strip-ansi-action
+        uses: ./
         with:
-          files: strip-ansi-action/tests/fixtures/threat.txt
+          files: tests/fixtures/threat.txt
           on-threat: strip
 
       - name: Assert strip result

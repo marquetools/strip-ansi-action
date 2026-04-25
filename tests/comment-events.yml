@@ -1,0 +1,56 @@
+# strip-ansi-action: per-comment event workflow
+#
+# This workflow fires on each NEW or EDITED comment on issues and pull requests,
+# scanning only the single comment that just changed.  This is more efficient
+# than batch-scanning all comments because it avoids re-processing content that
+# has already been reviewed.
+#
+# Copy this file to your repository's .github/workflows/ directory to enable it.
+# Required permissions are listed on the job below.
+
+name: Scan new/edited comments
+
+on:
+  issue_comment:
+    types: [created, edited]
+  pull_request_review_comment:
+    types: [created, edited]
+  pull_request_review:
+    types: [submitted, edited]
+
+permissions:
+  # Read comments.  Add 'issues: write' and/or 'pull-requests: write' if you
+  # want the action to rewrite comment bodies when on-threat is 'strip'.
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  scan-comment:
+    name: Scan comment for ANSI/Unicode threats
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Scan just the comment that triggered this workflow.
+      # The action reads GITHUB_EVENT_PATH to find the correct issue/PR number.
+      - name: Scan comment
+        id: scan
+        uses: marquetools/strip-ansi-action@v1
+        with:
+          # No 'files' needed — we are only scanning the triggering comment.
+          clean-pr-comments: ${{ github.event_name == 'pull_request_review_comment' || github.event_name == 'pull_request_review' }}
+          clean-issue-comments: ${{ github.event_name == 'issue_comment' }}
+          on-threat: warn   # change to 'strip' to automatically clean threats,
+                            # or 'fail' to block until a human reviews it.
+          preset: sanitize
+
+      - name: Report
+        if: always()
+        run: |
+          echo "Threat detected: ${{ steps.scan.outputs.comment-threat-detected }}"
+          if [ "${{ steps.scan.outputs.comment-threat-detected }}" = "true" ]; then
+            echo "Comments with threats:"
+            echo "${{ steps.scan.outputs.comments-with-threats }}"
+          fi
