@@ -187,14 +187,18 @@ jobs:
           # Scan changed files on pull_request events; empty on comment events (no-op).
           files: ${{ steps.changed-files.outputs.all_changed_files }}
 
-          # Scan PR discussion + review comments on PR events.
+          # Scan PR discussion + review comments on PR events, including
+          # issue_comment events when the comment belongs to a pull request.
           clean-pr-comments: >-
             ${{ github.event_name == 'pull_request' ||
                 github.event_name == 'pull_request_review_comment' ||
-                github.event_name == 'pull_request_review' }}
+                github.event_name == 'pull_request_review' ||
+                (github.event_name == 'issue_comment' && github.event.issue.pull_request) }}
 
-          # Scan issue comments on issue_comment events.
-          clean-issue-comments: ${{ github.event_name == 'issue_comment' }}
+          # Scan issue comments only for real issues, not PR issue_comment events.
+          clean-issue-comments: >-
+            ${{ github.event_name == 'issue_comment' &&
+                github.event.issue.pull_request == null }}
 
           # Change to 'fail' to block on threat, or 'strip' to auto-clean comment bodies.
           on-threat: warn
@@ -222,7 +226,8 @@ jobs:
 | `pull_request` | ✅ Changed files | ✅ All PR comments | — |
 | `pull_request_review_comment` | — | ✅ All PR comments | — |
 | `pull_request_review` | — | ✅ All PR comments | — |
-| `issue_comment` | — | — | ✅ All issue comments |
+| `issue_comment` on a PR | — | ✅ All PR comments | — |
+| `issue_comment` on an issue | — | — | ✅ All issue comments |
 
 To auto-clean threats instead of warning, set `on-threat: strip` and upgrade the permissions to `pull-requests: write` and/or `issues: write`.
 
