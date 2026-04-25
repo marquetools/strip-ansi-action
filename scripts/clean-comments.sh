@@ -284,6 +284,7 @@ process_comments_file() {
 
       local entry
       entry="$(build_comment_entry "${id}" "${comment_type}" "${html_url}" "clean" '""')"
+      # output is already '""' (empty), so full_entry == cap_entry here.
       _append_entry "${entry}" "${entry}"
       continue
     fi
@@ -367,7 +368,7 @@ work_dir = sys.argv[2]
 for c in data:
     cid = str(c['id'])
     body = c.get('body') or ''
-    with open(os.path.join(work_dir, 'comment-body-' + cid + '.txt'), 'w') as bf:
+    with open(os.path.join(work_dir, 'comment-body-' + cid + '.txt'), 'w', encoding='utf-8') as bf:
         bf.write(body)
     print(cid + '\t' + (c.get('html_url') or ''))
 PYEOF
