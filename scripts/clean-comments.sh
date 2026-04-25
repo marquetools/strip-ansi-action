@@ -47,10 +47,10 @@ MAX_OUTPUT_BYTES=51200
 # Maximum total bytes for the entire comment-results JSON string.
 MAX_RESULTS_BYTES=512000
 
-# Detect a Python interpreter.
+# Detect a Python 3 interpreter.
 if command -v python3 &>/dev/null; then
   PYTHON="python3"
-elif command -v python &>/dev/null; then
+elif command -v python &>/dev/null && python -c 'import sys; sys.exit(0 if sys.version_info[0] == 3 else 1)' 2>/dev/null; then
   PYTHON="python"
 else
   echo "::error::strip-ansi-action requires Python 3 (python3 or python) but none was found on PATH." >&2
@@ -106,6 +106,12 @@ PYEOF
 case "${ON_THREAT}" in
   fail|strip|warn) ;;
   *) echo "::error::Invalid on-threat value '$(escape_annotation_message "${ON_THREAT}")'. Must be fail, strip, or warn."; exit 1 ;;
+esac
+
+# Validate the preset input.
+case "${PRESET}" in
+  dumb|color|sanitize|tmux|xterm|full) ;;
+  *) echo "::error::Invalid preset '$(escape_annotation_message "${PRESET}")'. Must be one of: dumb, color, sanitize, tmux, xterm, full."; exit 1 ;;
 esac
 
 if [ -z "${GITHUB_TOKEN}" ]; then
@@ -165,8 +171,8 @@ fetch_all_comments() {
         --header "X-GitHub-Api-Version: 2022-11-28" \
         --output "${tmp_page}" \
         "${endpoint}?per_page=${per_page}&page=${page}"; then
-      echo "::warning::Failed to fetch page ${page} from ${endpoint}." >&2
-      break
+      echo "::error::Failed to fetch page ${page} of comments from ${endpoint}. Aborting to avoid an incomplete scan." >&2
+      exit 1
     fi
 
     local count
@@ -263,23 +269,13 @@ process_comments_file() {
   log "Processing ${count} ${comment_type}(s)..."
 
   # Emit one line per comment: id<TAB>html_url
+  # A single Python pass writes all comment bodies to individual files and
+  # emits the id/html_url pairs, so each comment is visited exactly once.
   local id html_url
   while IFS=$'\t' read -r id html_url; do
     [ -z "${id}" ] && continue
 
     local body_file="${WORK_DIR}/comment-body-${id}.txt"
-
-    # Extract the comment body by ID.
-    "${PYTHON}" - "${json_file}" "${id}" > "${body_file}" <<'PYEOF'
-import sys, json
-with open(sys.argv[1]) as f:
-    data = json.load(f)
-target_id = int(sys.argv[2])
-for c in data:
-    if c['id'] == target_id:
-        sys.stdout.write(c.get('body') or '')
-        break
-PYEOF
 
     # Skip completely empty comment bodies.
     if [ ! -s "${body_file}" ]; then
@@ -288,7 +284,7 @@ PYEOF
 
       local entry
       entry="$(build_comment_entry "${id}" "${comment_type}" "${html_url}" "clean" '""')"
-      _append_entry "${entry}"
+      _append_entry "${entry}" "${entry}"
       continue
     fi
 
@@ -358,16 +354,22 @@ PYEOF
 
     rm -f "${body_file}" "${out_file}"
 
-    local entry
+    local entry cap_entry
     entry="$(build_comment_entry "${id}" "${comment_type}" "${html_url}" "${status}" "${out_json}")"
-    _append_entry "${entry}"
+    cap_entry="$(build_comment_entry "${id}" "${comment_type}" "${html_url}" "${status}" '""')"
+    _append_entry "${entry}" "${cap_entry}"
 
-  done < <("${PYTHON}" - "${json_file}" <<'PYEOF'
-import sys, json
+  done < <("${PYTHON}" - "${json_file}" "${WORK_DIR}" <<'PYEOF'
+import sys, json, os
 with open(sys.argv[1]) as f:
     data = json.load(f)
+work_dir = sys.argv[2]
 for c in data:
-    print(str(c['id']) + '\t' + (c.get('html_url') or ''))
+    cid = str(c['id'])
+    body = c.get('body') or ''
+    with open(os.path.join(work_dir, 'comment-body-' + cid + '.txt'), 'w') as bf:
+        bf.write(body)
+    print(cid + '\t' + (c.get('html_url') or ''))
 PYEOF
 )
 }
@@ -380,26 +382,41 @@ build_comment_entry() {
 }
 
 # Append a JSON entry to COMMENT_RESULTS_JSON, honouring the global size cap.
+# Args: full_entry  cap_entry (same entry but with output set to "")
+# Once the cap is reached, metadata-only (cap) entries are still appended until
+# even a content-free entry would exceed the limit, matching run.sh behaviour.
 _append_entry() {
-  local entry="$1"
-  if [ "${RESULTS_CAPPED}" = "true" ]; then return; fi
+  local entry="$1" cap_entry="$2"
 
   local sep_bytes=1
   [ "${FIRST_ENTRY}" = "true" ] && sep_bytes=0
+
+  # If not yet capped, try the full entry first.
+  if [ "${RESULTS_CAPPED}" = "false" ]; then
+    local projected
+    projected=$(( $(byte_len "${COMMENT_RESULTS_JSON}") + $(byte_len "${entry}") + sep_bytes ))
+    if [ "${projected}" -le "${MAX_RESULTS_BYTES}" ]; then
+      if [ "${FIRST_ENTRY}" = "true" ]; then FIRST_ENTRY=false; else COMMENT_RESULTS_JSON+=","; fi
+      COMMENT_RESULTS_JSON+="${entry}"
+      return
+    fi
+    # Full entry doesn't fit; switch to content-free entries for the remainder.
+    RESULTS_CAPPED=true
+    log "Global comment-results JSON cap (${MAX_RESULTS_BYTES} bytes) reached; omitting output content for remaining comments."
+    entry="${cap_entry}"
+  else
+    entry="${cap_entry}"
+  fi
+
+  # Try the content-free (cap) entry.
   local projected
   projected=$(( $(byte_len "${COMMENT_RESULTS_JSON}") + $(byte_len "${entry}") + sep_bytes ))
-
   if [ "${projected}" -gt "${MAX_RESULTS_BYTES}" ]; then
-    RESULTS_CAPPED=true
-    log "Global comment-results JSON cap (${MAX_RESULTS_BYTES} bytes) reached; truncating."
+    log "Global comment-results JSON cap (${MAX_RESULTS_BYTES} bytes) prevents adding further entries; truncating results list."
     return
   fi
 
-  if [ "${FIRST_ENTRY}" = "true" ]; then
-    FIRST_ENTRY=false
-  else
-    COMMENT_RESULTS_JSON+=","
-  fi
+  if [ "${FIRST_ENTRY}" = "true" ]; then FIRST_ENTRY=false; else COMMENT_RESULTS_JSON+=","; fi
   COMMENT_RESULTS_JSON+="${entry}"
 }
 

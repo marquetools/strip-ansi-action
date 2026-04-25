@@ -199,7 +199,7 @@ runs:
           s="${s//$'\n'/'%0A'}"
           printf '%s' "${s}"
         }
-        echo "::error::ANSI/Unicode echoback threat(s) detected. See annotated files below."
+        echo "::error::ANSI/Unicode echoback threat(s) detected. See annotated files and comments below."
         while IFS= read -r f; do
           if [ -n "$f" ]; then
             ef="$(escape_annotation_property "$f")"
