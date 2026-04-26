@@ -83,10 +83,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ steps.version.outputs.version }}" \
-            --title "strip-ansi-action ${{ steps.version.outputs.version }}" \
-            --generate-notes \
-            --verify-tag
+          VERSION="${{ steps.version.outputs.version }}"
+          if gh release view "${VERSION}" >/dev/null 2>&1; then
+            echo "Release ${VERSION} already exists, skipping creation."
+          else
+            gh release create "${VERSION}" \
+              --title "strip-ansi-action ${VERSION}" \
+              --generate-notes \
+              --verify-tag
+          fi
 
       - name: Update floating major tag (e.g. v1)
         run: |
