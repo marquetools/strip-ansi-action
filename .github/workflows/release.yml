@@ -25,7 +25,7 @@ jobs:
             strip-ansi-action/scripts/run.sh
 
       - name: actionlint
-        uses: rhysd/actionlint@v1
+        uses: rhysd/actionlint@011a6d15e749bb3f2d771eed9c7aa0e7e3e10ee7
         with:
           files: strip-ansi-action/action.yml
 
@@ -42,7 +42,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
 
       - name: Smoke test — clean file
         uses: ./strip-ansi-action
@@ -64,7 +64,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
         with:
           fetch-depth: 0
 
