@@ -150,18 +150,18 @@ FILES=()
 while IFS= read -r _file; do
   filename="${_file##*/}"
   extension="${filename##*.}"
-  if [[ " ${SKIP_EXTENSIONS[*]} " == *" ${extension,,} "* ]]; then
+  extension_lower=$(printf '%s' "$extension" | tr '[:upper:]' '[:lower:]')
+  if [[ " ${SKIP_EXTENSIONS[*]} " == *" ${extension_lower} "* ]]; then
     log "Skipping ${_file} due to extension .${extension}"
     continue
   fi
-	if [ -n "${_file}" ] && [ -n "${_file// /}" ] && [ "${_file}" != "." ] && [ "${_file}" != ".." ]; then
-		FILES+=("${_file}")
-	fi
+  if [ -n "${_file}" ] && [ -n "${_file// /}" ] && [ "${_file}" != "." ] && [ "${_file}" != ".." ]; then
+    FILES+=("${_file}")
+  fi
 done < <(printf '%s\n' "${_raw_input}" | sed '/^[[:space:]]*$/d')
-
 if [ "${#FILES[@]}" -eq 0 ]; then
-	echo "::error::No files provided to the strip-ansi action (input 'files' is empty)."
-	exit 1
+  echo "::error::No files provided to the strip-ansi action (input 'files' is empty)."
+  exit 1
 fi
 
 log "Scanning ${#FILES[@]} file(s) with preset=${PRESET}, on-threat=${ON_THREAT}"
