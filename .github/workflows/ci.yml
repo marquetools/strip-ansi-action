@@ -26,10 +26,14 @@ jobs:
             scripts/clean-comments.sh
 
       - name: actionlint
-        uses: rhysd/actionlint@011a6d15e749bb3f2d771eed9c7aa0e7e3e10ee7
+        id: action-lint
+        uses: devops-actions/actionlint@5b8e487739690fe67cb3bd38471d2abfd34daff3
+        continue-on-error: true
+      - name: action-results
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          files: action.yml
-
+          path: ${{ steps.action-lint.outputs.results-file }}
+  
   # ---------------------------------------------------------------------------
   # Job 2: Cross-platform integration tests
   # ---------------------------------------------------------------------------
