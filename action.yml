@@ -57,7 +57,7 @@ inputs:
   version:
     description: "Version of distill-strip-ansi to install (must match a published crates.io release)."
     required: false
-    default: "0.5.2"
+    default: "0.6.1"
 
   clean-pr-comments:
     description: >
